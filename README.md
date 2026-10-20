@@ -22,3 +22,9 @@ python -m http.server 8123
 ```
 
 資料由香港政府資料一線通（data.gov.hk）以公開 API 提供。
+
+## 部署方式
+
+- GitHub Pages，仓库 `tyt7878.github.io`，`main` 分支根目录
+- 推送方式：SSH（ed25519，指纹 `SHA256:MbqBYqW7p/z2FL8Ub3ErEicJb+iBAwiVRMOWG8pqysQ`）
+- 更新：`git add -A && git commit -m "更新" && git push`，Pages 约 25 秒自动重建
