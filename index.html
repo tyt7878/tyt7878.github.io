@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Next B3A · 城巴 B3A 實時到站</title>
+<meta name="description" content="Citybus B3A 實時到站顯示板：富泰邨 → 深圳灣口岸、深圳灣口岸 → 屯門山景邨。資料來源 DATA.GOV.HK，每 30 秒更新。">
+<meta name="theme-color" content="#c00000">
+<meta property="og:title" content="Next B3A · 城巴 B3A 實時到站">
+<meta property="og:description" content="富泰邨 ⇄ 深圳灣口岸，實時班次。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0;
+         background: #f4f6f8; color: #1f2933; }
+  header { background: #c00000; color: #fff; padding: 16px 24px; }
+  header h1 { margin: 0; font-size: 28px; }
+  header p { margin: 4px 0 0; opacity: .9; }
+  main { display: flex; flex-wrap: wrap; gap: 20px; padding: 24px; }
+  section { flex: 1 1 320px; background: #fff; border-radius: 12px; padding: 18px 22px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  h2 { margin: 0 0 4px; font-size: 20px; color: #1f4e79; }
+  .stop { color: #6b7280; margin: 0 0 14px; }
+  .bus { display: flex; justify-content: space-between; align-items: baseline;
+         border-top: 1px solid #e5e7eb; padding: 10px 0; }
+  .bus:last-child { border-bottom: 1px solid #e5e7eb; }
+  .min { font-size: 34px; font-weight: 700; color: #c00000; }
+  .min.soon { color: #059669; }
+  .clock { color: #6b7280; font-variant-numeric: tabular-nums; }
+  .none { color: #6b7280; padding: 10px 0; }
+  footer { padding: 0 24px 24px; color: #6b7280; font-size: 14px;
+           display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px;
+           border: 1px solid #d1d5db; background: #fff; color: #1f2933; cursor: pointer; }
+  button:hover { background: #f3f4f6; }
+  button[disabled] { opacity: .5; cursor: default; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #111827; color: #e5e7eb; }
+    section { background: #1f2937; box-shadow: none; }
+    h2 { color: #93c5fd; }
+    .stop, .clock, .none, footer { color: #9ca3af; }
+    .bus { border-color: #374151; }
+    button { background: #1f2937; border-color: #4b5563; color: #e5e7eb; }
+    button:hover { background: #374151; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Next B3A</h1>
+  <p>Citybus · 富泰邨 ⇄ 深圳灣口岸 · 城巴 B3A</p>
+</header>
+<main>
+  <section>
+    <h2>To Shenzhen Bay Port · 往深圳灣口岸</h2>
+    <p class="stop">From Fu Tai Estate, Castle Peak Road · 富泰邨</p>
+    <div id="out">Loading…</div>
+  </section>
+  <section>
+    <h2>To Tuen Mun · 往屯門山景邨</h2>
+    <p class="stop">From Shenzhen Bay Port · 深圳灣口岸</p>
+    <div id="in">Loading…</div>
+  </section>
+</main>
+<footer>
+  <span>Data: Citybus real-time ETA, DATA.GOV.HK · updated <span id="updated">–</span></span>
+  <button id="refresh" type="button">重新整理</button>
+  <span id="status"></span>
+</footer>
+<script>
+  // Stop IDs come from /route-stop/CTB/B3A/outbound and /stop/{id}:
+  // 003261 = Fu Tai Estate (outbound, last stop before the port)
+  // 003208 = Shenzhen Bay Port (inbound, first stop)
+  const API = "https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/";
+  const BOARDS = [["out", "003261", "O"], ["in", "003208", "I"]];
+  let failures = 0;
+
+  async function load(boxId, stop, dir) {
+    const box = document.getElementById(boxId);
+    try {
+      const res = await fetch(API + stop + "/B3A", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = (await res.json()).data.filter(b => b.dir === dir && b.eta);
+      failures = 0;
+      if (data.length === 0) {
+        box.innerHTML = '<div class="none">No bus in the next hour · 暫時沒有班次</div>';
+        return;
+      }
+      box.innerHTML = data.map(b => {
+        const t = new Date(b.eta);
+        const min = Math.max(0, Math.round((t - Date.now()) / 60000));
+        const clock = t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit",
+                                                      timeZone: "Asia/Hong_Kong" });
+        const note = b.rmk_en ? " · " + b.rmk_en : "";
+        return '<div class="bus"><span class="min' + (min <= 3 ? " soon" : "") + '">' +
+               (min === 0 ? "Arriving" : min + " min") + '</span>' +
+               '<span class="clock">' + clock + note + '</span></div>';
+      }).join("");
+    } catch (e) {
+      if (++failures >= 2) {
+        box.innerHTML = '<div class="none">Cannot reach the data. Check the Wi-Fi.</div>';
+      }
+    }
+  }
+
+  async function refresh() {
+    const btn = document.getElementById("refresh");
+    btn.disabled = true;
+    document.getElementById("status").textContent = "更新中…";
+    await Promise.all(BOARDS.map(([id, stop, dir]) => load(id, stop, dir)));
+    document.getElementById("updated").textContent =
+      new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Hong_Kong" });
+    document.getElementById("status").textContent = "";
+    btn.disabled = false;
+  }
+
+  document.getElementById("refresh").addEventListener("click", refresh);
+  refresh();
+  setInterval(refresh, 30000);
+</script>
+</body>
+</html>
